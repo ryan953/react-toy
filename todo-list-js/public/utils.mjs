@@ -3,8 +3,5 @@ export function mapToObj(map) {
 }
 
 export function isSameDependencyList(a, b) {
-  const sameLength = a.length === b.length;
-  const missingRefs = a.some((item) => !b.includes(item));
-  // console.log('isSameDepList', sameLength && !missingRefs, {a, b}, {sameLength, missingRefs});
-  return sameLength && !missingRefs;
+  return a.length === b.length && !a.some((item) => !b.includes(item));
 }
