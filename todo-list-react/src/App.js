@@ -34,7 +34,13 @@ function TodoList({items}) {
 }
 
 function TodoItem({item}) {
-  return <li>{item.done ? <strike>{item.name}</strike> : item.name}</li>
+  return (
+    <li>
+      {item.done
+        ? <strike>{item.name}</strike>
+        : item.name}
+    </li>
+  );
 }
 
 function AddTodo({addItem}) {

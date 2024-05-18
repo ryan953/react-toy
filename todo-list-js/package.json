@@ -1,0 +1,8 @@
+{
+  "name": "todo-list-react",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "python3 -m http.server -d ./public"
+  }
+}
