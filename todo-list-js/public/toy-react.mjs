@@ -1,41 +1,107 @@
 import { mapToObj, isSameDependencyList } from './utils.mjs'
 
-let __elemCleanups = [];
-let __rerender = () => {};
+let __renderTree;
 
-let __current_path = '';
-let __current_child = -1;
-let __current_hook = -1;
-const __hook_key = () => `${__current_path}[${__current_hook++}]`;
+class RenderTree {
+  __current_path = '';
+  __current_child = -1;
+  __current_hook = -1;
+  __elemCleanups = [];
+  
+  __state = {
+    toJSON: () => mapToObj(this.__state.values),
+    values: new Map(),
+  };
 
-const STATE = {
-  toJSON: () => mapToObj(STATE.values),
-  values: new Map(),
-  setters: new Map(),
-  withPath: function(name, callback) { 
-    const parentPath = __current_path;
-    const parentHook = __current_hook;
+  constructor(elem, builder) {
+    this.elem = elem;
+    this.builder = builder;
+  }
 
-    const segment = `${name}[${__current_child++}]`;
-    __current_path = [__current_path, segment].join('|');
-    __current_hook = 0;
+  render() {
+    console.log('--- rerender ---');
+    
+    this.__unmount();
+    this.__mount();
+  }
+
+  registerCleanup(callback) {
+    this.__elemCleanups.push(callback);
+  }
+
+  __unmount() {
+    this.__elemCleanups.forEach(cleanup => {
+      cleanup();
+    });
+
+    this.__current_path = 'root';
+    this.__current_child = 0;
+    this.__current_hook = 0;
+
+    Array.from(this.elem.children).forEach((child) => {
+      this.elem.removeChild(child);
+    });
+  }
+
+  __mount() {
+    const component = this.builder();
+    this.elem.appendChild(component());
+    this.elem.querySelector('[data-autofocus="true"')?.focus();
+  }
+
+  renderWithPath(name, callback) {
+    const parentPath = this.__current_path;
+    const parentHook = this.__current_hook;
+
+    const segment = `${name}[${this.__current_child++}]`;
+    this.__current_path = [this.__current_path, segment].join('|');
+    this.__current_hook = 0;
 
     const result = callback();
 
-    __current_path = parentPath;
-    __current_hook == parentHook;
+    this.__current_path = parentPath;
+    this.__current_hook == parentHook;
 
     return result;
-  },
-};
+  }
+
+  hookKey() {
+    return `${this.__current_path}[${this.__current_hook++}]`;
+  }
+
+  useStorage(type, {insert, update, after}) {
+    const key = __renderTree.hookKey();
+
+    const get = () => this.__state.values.get(key);
+    const set = (value) => this.__state.values.set(key, value);
+
+    const logValues = {};
+
+    if (this.__state.values.has(key)) {
+      logValues.prevState = get();
+      update({get, set});
+      logValues.newState = get();
+    } else {
+      insert({get, set});
+      logValues.state = get();
+    }
+    
+    const result = after({get});
+    console.log(type, {key, ...logValues, result, USE_STATE: this.__state.toJSON()});
+    return result;
+  }
+}
 
 const buildTag = (tag, attrs, children) => {
+  if (tag === '') {
+    return children;
+  }
   const elem = document.createElement(tag);
   Object.entries(attrs).forEach(([name, value]) => {
     if (name.startsWith('on')) {
       const type = name.replace(/^on/, '').toLowerCase();
       elem.addEventListener(type, value);
-      __elemCleanups.push(() => {
+      __renderTree.registerCleanup(() => {
         elem.removeEventListener(type, value);
       });
     } else {
@@ -47,7 +113,14 @@ const buildTag = (tag, attrs, children) => {
       const text = document.createTextNode(child);
       elem.appendChild(text);
     } else {
-      elem.appendChild(child());
+      const children = child();
+      if (children instanceof Array) {
+        children.forEach((c) => {
+          elem.appendChild(c());
+        });
+      } else {
+        elem.appendChild(children);
+      }
     }
   });
   return elem;
@@ -55,7 +128,7 @@ const buildTag = (tag, attrs, children) => {
 
 const buildComponent = (component, attrs, children) => {
   console.group('render', component.name, attrs);
-  const rendered = STATE.withPath(component.name, () => {
+  const rendered = __renderTree.renderWithPath(component.name, () => {
     return component(attrs, children);
   })();
   console.groupEnd();
@@ -71,49 +144,12 @@ export function createElement(tagOrComponent, attrs, children) {
 };
 
 export function render(elem, builder) {
-  __rerender = () => {
-    console.log('--- rerender ---');
-    __elemCleanups.forEach(cleanup => {
-      cleanup();
-    });
-    __current_path = 'root';
-    __current_child = 0;
-    __current_hook = 0;
-
-    const component = builder();
-    Array.from(elem.children).forEach((child) => {
-      elem.removeChild(child);
-    });
-    elem.appendChild(component());
-    elem.querySelector('[data-autofocus="true"')?.focus();
-  };
-  __rerender();
+  __renderTree = new RenderTree(elem, builder);
+  __renderTree.render();
 };
 
-function useStorage(type, {insert, update, after}) {
-  const key = __hook_key();
-
-  const get = () => STATE.values.get(key);
-  const set = (value) => STATE.values.set(key, value);
-
-  const logValues = {};
-
-  if (STATE.values.has(key)) {
-    logValues.prevState = get();
-    update({get, set});
-    logValues.newState = get();
-  } else {
-    insert({get, set});
-    logValues.state = get();
-  }
-  
-  const result = after({get});
-  console.log(type, {key, ...logValues, result, USE_STATE: STATE.toJSON()});
-  return result;
-}
-
 export function useState(dflt) {
-  return useStorage(
+  return __renderTree.useStorage(
     'useState',
     {
       insert: ({get, set}) => {
@@ -123,7 +159,7 @@ export function useState(dflt) {
             const [prevState, prevSetState] = get();
             const newState = callback(prevState);
             set([newState, prevSetState]);
-            __rerender();
+            __renderTree.render();
           },
         ]);
       },
@@ -153,20 +189,20 @@ const memoCallbackHook = (callback, deps) => ({
 });
 
 export function useMemo(callback, deps) {
-  return useStorage('useMemo', memoCallbackHook(callback, deps));
+  return __renderTree.useStorage('useMemo', memoCallbackHook(callback, deps));
 };
 
 export function useCallback(callback, deps) {
-  return useStorage('useCallback', memoCallbackHook(() => callback, deps));
+  return __renderTree.useStorage('useCallback', memoCallbackHook(() => callback, deps));
 }
 
 export function useEffect(callback, deps) {
-  return useStorage(
+  return __renderTree.useStorage(
     'useEffect',
     {
       insert: ({set}) => {
         const cleanup = callback() ?? (() => {});
-        __elemCleanups.push(cleanup);
+        __renderTree.registerCleanup(cleanup);
         set([deps, cleanup]);
       },
       update: ({get, set}) => {
@@ -175,7 +211,7 @@ export function useEffect(callback, deps) {
           prevCleanup();
 
           const newCleanup = callback() ?? (() => {});
-          __elemCleanups.push(newCleanup);
+          __renderTree.registerCleanup(newCleanup);
           set([deps, newCleanup]);
         }
       },

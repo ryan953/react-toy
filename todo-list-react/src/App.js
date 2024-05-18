@@ -1,13 +1,12 @@
 import {
+  //
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from 'react';
 
-import './App.css';
-
-function App() {
+export default function App() {
   return (
     <div className="App">
       <header className="App-header">
@@ -25,7 +24,7 @@ function App() {
 function Todo() {
   const [items, setItems] = useState([]);
   
-  const updateItem = (orig, change) => {
+  const updateItem = useCallback((orig, change) => {
     setItems(prev => {
       return prev.toSpliced(
         items.findIndex(item => item === orig),
@@ -33,14 +32,13 @@ function Todo() {
         change(orig),
       );
     });
-  };
+  }, [items]);
 
-  const addItem = (newItem) => {
+  const addItem = useCallback((newItem) => {
     setItems(prev => {
       return [...prev, newItem];
     })
-  };
-
+  }, []);
 
   return (
     <>
@@ -51,6 +49,10 @@ function Todo() {
 }
 
 function TodoList({items, updateItem}) {
+  useEffect(() => {
+    document.title = `${items.length} Items`;
+  }, [items.length]);
+
   return (
     <ol>
       {items.map(item => {
@@ -88,5 +90,3 @@ function AddTodo({addItem}) {
     </form>
   );
 }
-
-export default App;

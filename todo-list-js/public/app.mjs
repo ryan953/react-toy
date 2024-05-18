@@ -6,15 +6,19 @@ import {
   useState,
  } from "./toy-react.mjs";
 
-export function App() {
-  return _n('div', {class: 'App'}, [
-    _n('header', {class: 'App-header'}, [
-      _n('h1', {}, [
-        'JS TODO List',
+export default function App() {
+  return (
+    _n('div', {class: 'App'}, [
+      _n('header', {class: 'App-header'}, [
+        _n('h1', {}, [
+          'JS TODO List',
+        ]),
       ]),
-    ]),
-    _n(Todo, {}, []),
-  ]);
+      _n('main', {class: 'App-main'}, [
+        _n(Todo, {}, []),
+      ])
+    ])
+  );
 }
 
 function Todo() {
@@ -36,10 +40,12 @@ function Todo() {
     })
   }, []);
 
-  return _n('main', {class: 'App-main'}, [
-    _n(TodoList, { items, updateItem }, []),
-    _n(AddTodo, { addItem }, []),
-  ]);
+  return (
+    _n('', {}, [
+      _n(TodoList, { items, updateItem }, []),
+      _n(AddTodo, { addItem }, []),
+    ])
+  );
 }
 
 function TodoList({items, updateItem}) {
@@ -47,34 +53,40 @@ function TodoList({items, updateItem}) {
     document.title = `${items.length} Items`;
   }, [items.length]);
 
-  return _n('ol', {}, 
-    items.map(item => {
-      return _n(TodoItem, {item, onToggle: () => {
-        updateItem(item, (prev) => ({...prev, done: !prev.done}))
-      }}, []);
-    })
+  return (
+    _n('ol', {}, 
+      items.map(item => {
+        return _n(TodoItem, {item, onToggle: () => {
+          updateItem(item, (prev) => ({...prev, done: !prev.done}))
+        }}, []);
+      })
+    )
   );
 }
 
 function TodoItem({item, onToggle}) {
-  return _n('li', {onClick: onToggle}, [
-    item.done
-      ? _n('strike', {}, [item.name])
-      : item.name
-  ]);
+  return (
+    _n('li', {onClick: onToggle}, [
+      item.done
+        ? _n('strike', {}, [item.name])
+        : item.name
+    ])
+  );
 }
 
 function AddTodo({addItem}) {
-  return _n('form', {onSubmit: (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    addItem({
-      name: formData.get('todo'),
-      done: false,
-    });
-    event.target.reset();
-  }}, [
-    _n('input', {type: 'text', name: 'todo', 'data-autofocus': true}, []),
-    _n('button', {type: 'submit'}, ['Create']),
-  ]);
+  return (
+    _n('form', {onSubmit: (event) => {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      addItem({
+        name: formData.get('todo'),
+        done: false,
+      });
+      event.target.reset();
+    }}, [
+      _n('input', {type: 'text', name: 'todo', 'data-autofocus': true}, []),
+      _n('button', {type: 'submit'}, ['Create']),
+    ])
+  );
 }

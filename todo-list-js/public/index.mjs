@@ -1,4 +1,4 @@
-import { App } from './app.mjs';
+import App from './app.mjs';
 import { render } from './toy-react.mjs';
 
 const root = document.getElementById('root');
