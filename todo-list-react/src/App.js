@@ -1,9 +1,13 @@
-import * as React from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
 import './App.css';
 
 function App() {
-  const [items, setItems] = React.useState([]);
-
   return (
     <div className="App">
       <header className="App-header">
@@ -12,30 +16,55 @@ function App() {
         </h1>
       </header>
       <main className="App-main">
-        <TodoList items={items} />
-        <AddTodo addItem={(newItem) => {
-          setItems(prev => {
-            return [...prev, newItem];
-          });
-        }} />
+        <Todo />
       </main>
     </div>
   );
 }
 
-function TodoList({items}) {
+function Todo() {
+  const [items, setItems] = useState([]);
+  
+  const updateItem = (orig, change) => {
+    setItems(prev => {
+      return prev.toSpliced(
+        items.findIndex(item => item === orig),
+        1,
+        change(orig),
+      );
+    });
+  };
+
+  const addItem = (newItem) => {
+    setItems(prev => {
+      return [...prev, newItem];
+    })
+  };
+
+
+  return (
+    <>
+      <TodoList items={items} updateItem={updateItem} />
+      <AddTodo addItem={addItem} />
+    </>
+  )
+}
+
+function TodoList({items, updateItem}) {
   return (
     <ol>
       {items.map(item => {
-        return <TodoItem item={item} />;
+        return <TodoItem item={item} onToggle={() => {
+          updateItem(item, (prev) => ({...prev, done: !prev.done}))
+        }} />;
       })}
     </ol>
   );
 }
 
-function TodoItem({item}) {
+function TodoItem({item, onToggle}) {
   return (
-    <li>
+    <li onClick={onToggle}>
       {item.done
         ? <strike>{item.name}</strike>
         : item.name}
