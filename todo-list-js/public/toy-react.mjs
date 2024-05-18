@@ -90,75 +90,99 @@ export function render(elem, builder) {
   __rerender();
 };
 
-export function useState(dflt) {
-  const key = __hook_key('useState');
+function useStorage(type, {insert, update, after}) {
+  const key = __hook_key();
+
+  const get = () => STATE.values.get(key);
+  const set = (value) => STATE.values.set(key, value);
+
+  const logValues = {};
+
+  if (STATE.values.has(key)) {
+    logValues.prevState = get();
+    update({get, set});
+    logValues.newState = get();
+  } else {
+    insert({get, set});
+    logValues.state = get();
+  }
   
-  if (!STATE.values.has(key)) {
-    STATE.values.set(key, dflt);
-  }
-  const value = STATE.values.get(key);
-  console.log('useState', {key, value, dflt, USE_STATE: STATE.toJSON()});
+  const result = after({get});
+  console.log(type, {key, ...logValues, result, USE_STATE: STATE.toJSON()});
+  return result;
+}
 
-  if (!STATE.setters.has(key)) {
-    STATE.setters.set(key, (callback) => {
-      const prevState = STATE.values.get(key);
-      const newState = callback(prevState);
-      console.log('setState', {key, prevState, newState, USE_STATE: STATE.toJSON()});
-      STATE.values.set(key, newState);
-      __rerender();
-    });
-  }
-  const setState = STATE.setters.get(key);
-
-  return [value, setState];
+export function useState(dflt) {
+  return useStorage(
+    'useState',
+    {
+      insert: ({get, set}) => {
+        set([
+          dflt,
+          (callback) => {
+            const [prevState, prevSetState] = get();
+            const newState = callback(prevState);
+            set([newState, prevSetState]);
+            __rerender();
+          },
+        ]);
+      },
+      update: () => {
+        // No updates happen via useState()
+      },
+      after: ({get}) => get(),
+    }
+  );
 };
 
-export function useMemo(callback, deps) {
-  const key = __hook_key('useMemo');
-  
-  if (STATE.values.has(key)) {
-    const {deps: prevDeps, value: prevValue} = STATE.values.get(key);
-    if (isSameDependencyList(prevDeps, deps)) {
-      console.log('useMemo', {key, prevValue, USE_STATE: STATE.toJSON()});
-      return prevValue;
-    } else {
+const memoCallbackHook = (callback, deps) => ({
+  insert: ({set}) => {
+    set([deps, callback()]);
+  },
+  update: ({get, set}) => {
+    const [prevDeps] = get();
+    if (!isSameDependencyList(prevDeps, deps)) {
       const newValue = callback();
-      console.log('useMemo', {key, prevValue, newValue, USE_STATE: STATE.toJSON()});
-      STATE.values.set(key, {deps, value: newValue});
-      return newValue;
+      set([deps, newValue]);
     }
-  } else {
-    const value = callback();
-    console.log('useMemo', {key, value, USE_STATE: STATE.toJSON()});
-    STATE.values.set(key, {deps, value});
+  },
+  after: ({get}) => {
+    const [, value] = get();
     return value;
-  }
+  },
+});
+
+export function useMemo(callback, deps) {
+  return useStorage('useMemo', memoCallbackHook(callback, deps));
 };
 
 export function useCallback(callback, deps) {
-  return useMemo(() => callback, deps);
+  return useStorage('useCallback', memoCallbackHook(() => callback, deps));
 }
 
 export function useEffect(callback, deps) {
-  const key = __hook_key('useEffect');
+  return useStorage(
+    'useEffect',
+    {
+      insert: ({set}) => {
+        const cleanup = callback() ?? (() => {});
+        __elemCleanups.push(cleanup);
+        set([deps, cleanup]);
+      },
+      update: ({get, set}) => {
+        const [prevDeps, prevCleanup] = get();
+        if (!isSameDependencyList(prevDeps, deps)) {
+          prevCleanup();
 
-  if (STATE.values.has(key)) {
-    const {deps: prevDeps, cleanup: prevCleanup} = STATE.values.get(key);
-    if (isSameDependencyList(prevDeps, deps)) {
-      console.log('useEffect', {key, USE_STATE: STATE.toJSON()});
-    } else {
-      prevCleanup();
-
-      const newCleanup = callback() ?? (() => {});
-      __elemCleanups.push(newCleanup);
-      console.log('useEffect', {key, newCleanup, USE_STATE: STATE.toJSON()});
-      STATE.values.set(key, {deps, cleanup: newCleanup});
-    }
-  } else {
-    const cleanup = callback() ?? (() => {});
-    __elemCleanups.push(cleanup);
-    console.log('useEffect', {key, cleanup, USE_STATE: STATE.toJSON()});
-    STATE.values.set(key, {deps, cleanup});
-  }
+          const newCleanup = callback() ?? (() => {});
+          __elemCleanups.push(newCleanup);
+          set([deps, newCleanup]);
+        }
+      },
+      after: () => {
+        // Nothing is returned from useEffect()
+      },
+    },
+  );
 };
 
