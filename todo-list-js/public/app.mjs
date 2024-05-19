@@ -51,6 +51,10 @@ function Todo() {
 function TodoList({items, updateItem}) {
   useEffect(() => {
     document.title = `${items.length} Items`;
+
+    return () => {
+      console.log('cleanup useEffect!');
+    }
   }, [items.length]);
 
   return (

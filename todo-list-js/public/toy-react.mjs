@@ -1,96 +1,7 @@
-import { mapToObj, isSameDependencyList } from './utils.mjs'
+import { isSameDependencyList } from './utils.mjs'
+import RenderTree from './render-tree.mjs';
 
 let __renderTree;
-
-class RenderTree {
-  __current_path = '';
-  __current_child = -1;
-  __current_hook = -1;
-  __elemCleanups = [];
-  
-  __state = {
-    toJSON: () => mapToObj(this.__state.values),
-    values: new Map(),
-  };
-
-  constructor(elem, builder) {
-    this.elem = elem;
-    this.builder = builder;
-  }
-
-  render() {
-    console.log('--- rerender ---');
-    
-    this.__unmount();
-    this.__mount();
-  }
-
-  registerCleanup(callback) {
-    this.__elemCleanups.push(callback);
-  }
-
-  __unmount() {
-    this.__elemCleanups.forEach(cleanup => {
-      cleanup();
-    });
-
-    this.__current_path = 'root';
-    this.__current_child = 0;
-    this.__current_hook = 0;
-
-    Array.from(this.elem.children).forEach((child) => {
-      this.elem.removeChild(child);
-    });
-  }
-
-  __mount() {
-    const component = this.builder();
-    this.elem.appendChild(component());
-    this.elem.querySelector('[data-autofocus="true"')?.focus();
-  }
-
-  renderWithPath(name, callback) {
-    const parentPath = this.__current_path;
-    const parentHook = this.__current_hook;
-
-    const segment = `${name}[${this.__current_child++}]`;
-    this.__current_path = [this.__current_path, segment].join('|');
-    this.__current_hook = 0;
-
-    const result = callback();
-
-    this.__current_path = parentPath;
-    this.__current_hook == parentHook;
-
-    return result;
-  }
-
-  hookKey() {
-    return `${this.__current_path}[${this.__current_hook++}]`;
-  }
-
-  useStorage(type, {insert, update, after}) {
-    const key = __renderTree.hookKey();
-
-    const get = () => this.__state.values.get(key);
-    const set = (value) => this.__state.values.set(key, value);
-
-    const logValues = {};
-
-    if (this.__state.values.has(key)) {
-      logValues.prevState = get();
-      update({get, set});
-      logValues.newState = get();
-    } else {
-      insert({get, set});
-      logValues.state = get();
-    }
-    
-    const result = after({get});
-    console.log(type, {key, ...logValues, result, USE_STATE: this.__state.toJSON()});
-    return result;
-  }
-}
 
 const buildTag = (tag, attrs, children) => {
   if (tag === '') {
@@ -143,11 +54,20 @@ export function createElement(tagOrComponent, attrs, children) {
   };
 };
 
-export function render(elem, builder) {
-  __renderTree = new RenderTree(elem, builder);
+export function render(elem, rootComponent) {
+  __renderTree = new RenderTree(elem, rootComponent);
   __renderTree.render();
 };
 
+/**
+ * useState is built in terms of useStorage
+ * 
+ * When `useState()` is first called, we insert a default value, and a setter
+ * into storage.
+ * When the setter is called we update storage to have a new value, but
+ * re-insert the same setter for next time. This preserves the memory reference
+ * to the setter function across calls.
+ */
 export function useState(dflt) {
   return __renderTree.useStorage(
     'useState',
@@ -171,6 +91,19 @@ export function useState(dflt) {
   );
 };
 
+/**
+ * Both useMemo and useCallback will stash the result of a callback into storage,
+ * using the deps array as the cache key. The only difference is that useMemo 
+ * will invoke the function directly, while useCallback will return the function 
+ * itself. Therefore, you can think of `useCallback` is a convenience wrapper
+ * for `useMemo(() => callback, [])`.
+ * 
+ * The `deps` array is a unique Array object each time, while the values inside
+ * it are expected to be stable references between calls. For this reason we 
+ * don't actually use `deps` as the direct cache-key, but instead insert the
+ * array into the cache itself via: `set([deps, value])`. At read time we can
+ * shallow-compare deps with what we found in the cache.
+ */
 const memoCallbackHook = (callback, deps) => ({
   insert: ({set}) => {
     set([deps, callback()]);
@@ -178,8 +111,7 @@ const memoCallbackHook = (callback, deps) => ({
   update: ({get, set}) => {
     const [prevDeps] = get();
     if (!isSameDependencyList(prevDeps, deps)) {
-      const newValue = callback();
-      set([deps, newValue]);
+      set([deps, callback()]);
     }
   },
   after: ({get}) => {
@@ -196,13 +128,17 @@ export function useCallback(callback, deps) {
   return __renderTree.useStorage('useCallback', memoCallbackHook(() => callback, deps));
 }
 
+/**
+ * useEffect runs a callback and will stash the result of the callback into
+ * storage. The result is then run when the dependencies have changed, or when
+ * the component is unmounted (this is not implemented).
+ */
 export function useEffect(callback, deps) {
   return __renderTree.useStorage(
     'useEffect',
     {
       insert: ({set}) => {
         const cleanup = callback() ?? (() => {});
-        __renderTree.registerCleanup(cleanup);
         set([deps, cleanup]);
       },
       update: ({get, set}) => {
@@ -211,7 +147,6 @@ export function useEffect(callback, deps) {
           prevCleanup();
 
           const newCleanup = callback() ?? (() => {});
-          __renderTree.registerCleanup(newCleanup);
           set([deps, newCleanup]);
         }
       },
