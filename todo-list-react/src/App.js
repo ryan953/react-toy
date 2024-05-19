@@ -1,5 +1,5 @@
 import {
-  //
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -41,10 +41,10 @@ function Todo() {
   }, []);
 
   return (
-    <>
+    <Fragment>
       <TodoList items={items} updateItem={updateItem} />
       <AddTodo addItem={addItem} />
-    </>
+    </Fragment>
   )
 }
 
