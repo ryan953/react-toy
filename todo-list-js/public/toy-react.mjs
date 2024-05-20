@@ -39,7 +39,7 @@ const buildTag = (tag, attrs, children) => {
 
 const buildComponent = (component, attrs, children) => {
   console.group('render', component.name, attrs);
-  const rendered = __renderTree.renderWithPath(component.name, () => {
+  const rendered = __renderTree.wrapComponentRender(component.name, () => {
     return component(attrs, children);
   })();
   console.groupEnd();
@@ -56,7 +56,7 @@ export function createElement(tagOrComponent, attrs, children) {
 
 export function render(elem, rootComponent) {
   __renderTree = new RenderTree(elem, rootComponent);
-  __renderTree.render();
+  __renderTree.renderFullTree();
 };
 
 /**
@@ -79,7 +79,7 @@ export function useState(dflt) {
             const [prevState, prevSetState] = get();
             const newState = callback(prevState);
             set([newState, prevSetState]);
-            __renderTree.render();
+            __renderTree.renderFullTree();
           },
         ]);
       },

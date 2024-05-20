@@ -2,8 +2,8 @@ import { mapToObj } from './utils.mjs'
 
 /**
  * The RenderTree renders tags and components starting from the root, tracking
- * component depth via renderWithPath() as it goes. This depth information is
- * used to construct keys for hook storage, so that successive renders will
+ * component depth via wrapComponentRender() as it goes. This depth information
+ * is used to construct keys for hook storage, so that successive renders will
  * find cached data which is exposed via useStorage.
  * 
  * Cleanup routines are not implemented. There is no virtual DOM to uniquely 
@@ -24,8 +24,8 @@ export default class RenderTree {
     this.rootComponent = rootComponent;
   }
 
-  render() {
-    console.log('--- rerender ---');
+  renderFullTree() {
+    console.log('--- renderFullTree ---');
     
     this.__unmount();
     this.__mount();
@@ -56,7 +56,7 @@ export default class RenderTree {
     this.elem.querySelector('[data-autofocus="true"')?.focus();
   }
 
-  renderWithPath(name, callback) {
+  wrapComponentRender(name, callback) {
     const parentPath = this.__current_path;
     const parentHook = this.__current_hook;
 
