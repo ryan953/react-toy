@@ -78,8 +78,10 @@ export function useState(dflt) {
           (callback) => {
             const [prevState, prevSetState] = get();
             const newState = callback(prevState);
-            set([newState, prevSetState]);
-            __renderTree.renderFullTree();
+            if (newState !== prevState) {
+              set([newState, prevSetState]);
+              __renderTree.renderFullTree();
+            }
           },
         ]);
       },
